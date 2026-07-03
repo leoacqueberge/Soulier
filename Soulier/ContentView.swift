@@ -10,11 +10,11 @@ struct ContentView: View {
             }
 
             Tab("History", systemImage: "clock", value: NavTab.history) {
-                HistoryView()
+                HistoryView(viewModel: viewModel)
             }
 
             Tab("Settings", systemImage: "gearshape", value: NavTab.settings) {
-                SettingsView()
+                SettingsView(viewModel: viewModel)
             }
         }
         .tint(.black)
@@ -27,7 +27,6 @@ struct ContentView: View {
 
 struct StepsDashboardView: View {
     @Bindable var viewModel: StepsViewModel
-    @State private var selectedTimeframe: Timeframe = .day
 
     var body: some View {
         ZStack {
@@ -41,9 +40,9 @@ struct StepsDashboardView: View {
                         .padding(.top, 8)
 
                     WeeklyBarChart(
-                        days: viewModel.summary.weeklySteps,
-                        selectedDayID: viewModel.selectedDay.id,
-                        onSelectDay: viewModel.selectDay
+                        periods: viewModel.chartPeriods,
+                        selectedPeriodID: viewModel.selectedPeriod.id,
+                        onSelectPeriod: viewModel.selectPeriod
                     )
                     .frame(maxHeight: .infinity)
                     .padding(.horizontal, 20)
@@ -53,8 +52,13 @@ struct StepsDashboardView: View {
                 .frame(maxHeight: .infinity)
 
                 StatsCard(
-                    day: viewModel.selectedDay,
-                    selectedTimeframe: $selectedTimeframe
+                    period: viewModel.selectedPeriod,
+                    selectedTimeframe: $viewModel.selectedTimeframe,
+                    onTimeframeChange: { timeframe in
+                        Task {
+                            await viewModel.setTimeframe(timeframe)
+                        }
+                    }
                 )
                 .padding(.horizontal, 10)
                 .padding(.bottom, 10)
@@ -63,7 +67,8 @@ struct StepsDashboardView: View {
         .ignoresSafeArea(edges: .bottom)
         .preferredColorScheme(.light)
         .lightStatusBar()
-        .animation(.easeInOut(duration: 0.2), value: viewModel.selectedDay.id)
+        .animation(.easeInOut(duration: 0.2), value: viewModel.selectedPeriod.id)
+        .animation(.easeInOut(duration: 0.2), value: viewModel.selectedTimeframe)
         .task {
             viewModel.startLiveUpdates()
         }
@@ -83,9 +88,11 @@ struct StepsDashboardView: View {
 
     private var goalBlock: some View {
         VStack(alignment: .leading, spacing: 1) {
-            Text(formattedGoal(viewModel.summary.dailyGoal))
+            Text(formattedGoal(viewModel.dailyGoal))
                 .font(.system(size: 18, weight: .bold, design: .monospaced))
                 .foregroundStyle(.white)
+                .contentTransition(.numericText())
+                .animation(.easeInOut(duration: 0.2), value: viewModel.dailyGoal)
 
             Text("Daily goal")
                 .font(.system(size: 10, weight: .medium, design: .monospaced))
@@ -101,10 +108,11 @@ struct StepsDashboardView: View {
 
     private var completionBlock: some View {
         VStack(alignment: .leading, spacing: 1) {
-            Text("\(viewModel.selectedDay.completionPercent(goal: viewModel.summary.dailyGoal))%")
+            Text("\(viewModel.selectedPeriod.completionPercent(goal: viewModel.dailyGoal))%")
                 .font(.system(size: 18, weight: .bold, design: .monospaced))
                 .foregroundStyle(.white)
                 .contentTransition(.numericText())
+                .animation(.easeInOut(duration: 0.2), value: viewModel.dailyGoal)
 
             Text("Completed")
                 .font(.system(size: 10, weight: .medium, design: .monospaced))
