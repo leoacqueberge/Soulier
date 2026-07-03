@@ -7,9 +7,9 @@ enum Timeframe: String, CaseIterable {
 
     var title: String {
         switch self {
-        case .day: "Day"
-        case .week: "Week"
-        case .month: "Month"
+        case .day: "D"
+        case .week: "W"
+        case .month: "M"
         }
     }
 }

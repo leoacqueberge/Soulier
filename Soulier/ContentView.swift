@@ -17,6 +17,7 @@ struct ContentView: View {
                 SettingsView()
             }
         }
+        .tint(.black)
         .toolbarBackground(.visible, for: .tabBar)
         .task {
             await viewModel.load()
@@ -29,33 +30,35 @@ struct StepsDashboardView: View {
     @State private var selectedTimeframe: Timeframe = .day
 
     var body: some View {
-        VStack(spacing: 0) {
-            VStack(spacing: 0) {
-                header
-                    .padding(.horizontal, 24)
-                    .padding(.top, 8)
-
-                WeeklyBarChart(
-                    days: viewModel.summary.weeklySteps,
-                    selectedDayID: viewModel.selectedDay.id,
-                    onSelectDay: viewModel.selectDay
-                )
-                .frame(maxHeight: .infinity)
-                .padding(.horizontal, 20)
-                .padding(.top, 12)
-                .padding(.bottom, 12)
-            }
-            .frame(maxHeight: .infinity)
-            .background(AppTheme.blueGradient)
-
-            StatsCard(
-                day: viewModel.selectedDay,
-                selectedTimeframe: $selectedTimeframe
-            )
-        }
-        .background {
+        ZStack {
             AppTheme.blueGradient
                 .ignoresSafeArea()
+
+            VStack(spacing: 0) {
+                VStack(spacing: 0) {
+                    header
+                        .padding(.horizontal, 24)
+                        .padding(.top, 8)
+
+                    WeeklyBarChart(
+                        days: viewModel.summary.weeklySteps,
+                        selectedDayID: viewModel.selectedDay.id,
+                        onSelectDay: viewModel.selectDay
+                    )
+                    .frame(maxHeight: .infinity)
+                    .padding(.horizontal, 20)
+                    .padding(.top, 12)
+                    .padding(.bottom, 12)
+                }
+                .frame(maxHeight: .infinity)
+
+                StatsCard(
+                    day: viewModel.selectedDay,
+                    selectedTimeframe: $selectedTimeframe
+                )
+                .padding(.horizontal, 10)
+                .padding(.bottom, 10)
+            }
         }
         .ignoresSafeArea(edges: .bottom)
         .preferredColorScheme(.light)
