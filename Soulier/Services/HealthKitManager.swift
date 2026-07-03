@@ -145,6 +145,21 @@ final class HealthKitManager {
         )
     }
 
+    func fetchStreak(goal: Int, maxDays: Int = 365) async -> Int? {
+        guard isAvailable, let stepType else { return nil }
+
+        let calendar = Calendar.current
+        let end = Date()
+        guard let start = calendar.date(byAdding: .day, value: -(maxDays - 1), to: calendar.startOfDay(for: end)) else {
+            return nil
+        }
+
+        let daySteps = await fetchDailyStepCounts(from: start, to: end, stepType: stepType)
+        guard !daySteps.isEmpty else { return nil }
+
+        return StreakCalculator.currentStreak(daySteps: daySteps, goal: goal, reference: end)
+    }
+
     func fetchToday() async -> DaySteps? {
         guard isAvailable,
               let stepType,
@@ -191,6 +206,46 @@ final class HealthKitManager {
         store.stop(observerQuery)
         self.observerQuery = nil
         isObserving = false
+    }
+
+    private func fetchDailyStepCounts(
+        from start: Date,
+        to end: Date,
+        stepType: HKQuantityType
+    ) async -> [DayStepCount] {
+        await withCheckedContinuation { continuation in
+            let calendar = Calendar.current
+            var anchorComponents = calendar.dateComponents([.day, .month, .year], from: start)
+            anchorComponents.hour = 0
+            guard let anchorDate = calendar.date(from: anchorComponents) else {
+                continuation.resume(returning: [])
+                return
+            }
+
+            let query = HKStatisticsCollectionQuery(
+                quantityType: stepType,
+                quantitySamplePredicate: nil,
+                options: .cumulativeSum,
+                anchorDate: anchorDate,
+                intervalComponents: DateComponents(day: 1)
+            )
+
+            query.initialResultsHandler = { _, results, _ in
+                guard let results else {
+                    continuation.resume(returning: [])
+                    return
+                }
+
+                var daySteps: [DayStepCount] = []
+                results.enumerateStatistics(from: start, to: end) { statistics, _ in
+                    let steps = Int(statistics.sumQuantity()?.doubleValue(for: .count()) ?? 0)
+                    daySteps.append(DayStepCount(date: statistics.startDate, steps: steps))
+                }
+                continuation.resume(returning: daySteps)
+            }
+
+            store.execute(query)
+        }
     }
 
     private func fetchWeeklyDays(
@@ -424,7 +479,7 @@ final class HealthKitManager {
         }
     }
 
-    private static func quantity(from result: HKStatistics?, option: HKStatisticsOptions) -> HKQuantity? {
+    nonisolated private static func quantity(from result: HKStatistics?, option: HKStatisticsOptions) -> HKQuantity? {
         switch option {
         case .discreteAverage: result?.averageQuantity()
         case .discreteMin: result?.minimumQuantity()
@@ -433,7 +488,7 @@ final class HealthKitManager {
         }
     }
 
-    private static func inclusiveDayCount(from start: Date, to end: Date, calendar: Calendar) -> Int {
+    nonisolated private static func inclusiveDayCount(from start: Date, to end: Date, calendar: Calendar) -> Int {
         max(calendar.dateComponents([.day], from: calendar.startOfDay(for: start), to: calendar.startOfDay(for: end)).day ?? 0, 0) + 1
     }
 
@@ -465,7 +520,7 @@ final class HealthKitManager {
         return formatter.string(from: date)
     }
 
-    private static func unit(for type: HKQuantityType) -> HKUnit {
+    nonisolated private static func unit(for type: HKQuantityType) -> HKUnit {
         switch type.identifier {
         case HKQuantityTypeIdentifier.stepCount.rawValue,
              HKQuantityTypeIdentifier.flightsClimbed.rawValue:

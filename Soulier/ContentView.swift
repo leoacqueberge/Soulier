@@ -83,6 +83,25 @@ struct StepsDashboardView: View {
             divider
             completionBlock
             Spacer(minLength: 0)
+            streakBlock
+        }
+    }
+
+    private var streakBlock: some View {
+        VStack(alignment: .leading, spacing: 1) {
+            HStack(spacing: 4) {
+                Image(systemName: "flame.fill")
+                    .font(.system(size: 14))
+                Text("\(viewModel.currentStreak)")
+                    .font(.system(size: 18, weight: .bold, design: .monospaced))
+                    .contentTransition(.numericText())
+            }
+            .foregroundStyle(.white)
+            .animation(.easeInOut(duration: 0.2), value: viewModel.currentStreak)
+
+            Text("Streak")
+                .font(.system(size: 10, weight: .medium, design: .monospaced))
+                .foregroundStyle(.white.opacity(0.75))
         }
     }
 

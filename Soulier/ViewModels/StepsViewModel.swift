@@ -18,11 +18,13 @@ final class StepsViewModel {
             }
             DailyGoalStore.value = dailyGoal
             summary.dailyGoal = dailyGoal
+            Task { await loadStreak() }
         }
     }
 
     var trendPeriod: TrendPeriod = .thisWeek
     var trend = TrendSummary.previewWeek
+    var currentStreak: Int = 0
 
     private let healthKit = HealthKitManager()
     private let debounceInterval: Duration = .seconds(1.5)
@@ -116,6 +118,15 @@ final class StepsViewModel {
         }
 
         await loadChartPeriods()
+        await loadStreak()
+    }
+
+    func loadStreak() async {
+        if let streak = await healthKit.fetchStreak(goal: dailyGoal) {
+            currentStreak = streak
+        } else {
+            currentStreak = StreakCalculator.currentStreak(from: summary.weeklySteps, goal: dailyGoal)
+        }
     }
 
     func startLiveUpdates() {
@@ -176,5 +187,6 @@ final class StepsViewModel {
 
         summary.weeklySteps[index] = today
         chartPeriods = summary.weeklySteps.map { $0.toPeriodStats() }
+        await loadStreak()
     }
 }
