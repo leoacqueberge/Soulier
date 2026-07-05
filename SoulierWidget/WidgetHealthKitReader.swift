@@ -8,12 +8,36 @@ struct WidgetStepsData {
     let calories: Int
     let floors: Int
 
+    init(date: Date, steps: Int, distanceKm: Double, calories: Int, floors: Int) {
+        self.date = date
+        self.steps = steps
+        self.distanceKm = distanceKm
+        self.calories = calories
+        self.floors = floors
+    }
+
+    init(snapshot: WidgetStepsSnapshot) {
+        date = snapshot.date
+        steps = snapshot.steps
+        distanceKm = snapshot.distanceKm
+        calories = snapshot.calories
+        floors = snapshot.floors
+    }
+
     static let preview = WidgetStepsData(
         date: .now,
         steps: 21_583,
         distanceKm: 14.67,
         calories: 669,
         floors: 17
+    )
+
+    static let empty = WidgetStepsData(
+        date: .now,
+        steps: 0,
+        distanceKm: 0,
+        calories: 0,
+        floors: 0
     )
 }
 
@@ -45,6 +69,25 @@ enum WidgetHealthKitReader {
         )
     }
 
+    static func resolveToday() async -> WidgetStepsData {
+        if let healthKit = await fetchToday(), healthKit.hasActivity {
+            WidgetSnapshotStore.save(
+                steps: healthKit.steps,
+                distanceKm: healthKit.distanceKm,
+                calories: healthKit.calories,
+                floors: healthKit.floors,
+                date: healthKit.date
+            )
+            return healthKit
+        }
+
+        if let cached = WidgetSnapshotStore.loadToday() {
+            return WidgetStepsData(snapshot: cached)
+        }
+
+        return await fetchToday() ?? .empty
+    }
+
     private static func sum(
         type: HKQuantityType,
         from start: Date,
@@ -64,5 +107,11 @@ enum WidgetHealthKitReader {
             }
             store.execute(query)
         }
+    }
+}
+
+private extension WidgetStepsData {
+    var hasActivity: Bool {
+        steps > 0 || distanceKm > 0 || calories > 0 || floors > 0
     }
 }

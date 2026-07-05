@@ -1,8 +1,9 @@
 import SwiftUI
+import UIKit
 
 enum WidgetTheme {
-    static let background = Color(hex: 0x000000)
-    static let steps = Color(hex: 0xF5F6F5)
+    static let background = Color.adaptive(light: 0xFFFFFF, dark: 0x000000)
+    static let steps = Color.adaptive(light: 0x000000, dark: 0xF5F6F5)
     static let stepsWalked = Color(hex: 0x575757)
     static let distance = Color(hex: 0x2FC472)
     static let calories = Color(hex: 0xF3BB23)
@@ -11,10 +12,22 @@ enum WidgetTheme {
 
 private extension Color {
     init(hex: UInt32) {
-        let red = Double((hex >> 16) & 0xFF) / 255
-        let green = Double((hex >> 8) & 0xFF) / 255
-        let blue = Double(hex & 0xFF) / 255
-        self.init(red: red, green: green, blue: blue)
+        self.init(uiColor: UIColor(hex: hex))
+    }
+
+    static func adaptive(light lightHex: UInt32, dark darkHex: UInt32) -> Color {
+        Color(UIColor { traitCollection in
+            UIColor(hex: traitCollection.userInterfaceStyle == .dark ? darkHex : lightHex)
+        })
+    }
+}
+
+private extension UIColor {
+    convenience init(hex: UInt32) {
+        let red = CGFloat((hex >> 16) & 0xFF) / 255
+        let green = CGFloat((hex >> 8) & 0xFF) / 255
+        let blue = CGFloat(hex & 0xFF) / 255
+        self.init(red: red, green: green, blue: blue, alpha: 1)
     }
 }
 

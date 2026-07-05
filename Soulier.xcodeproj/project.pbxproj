@@ -61,6 +61,11 @@
 			path = SoulierWidget;
 			sourceTree = "<group>";
 		};
+		10SHARED02FF85B8D005C72F2 /* Shared */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			path = Shared;
+			sourceTree = "<group>";
+		};
 /* End PBXFileSystemSynchronizedRootGroup section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -82,6 +87,7 @@
 			children = (
 				102B513A2FF85B8D005C72F2 /* Soulier */,
 				10A1W0022FF85B8D005C72F2 /* SoulierWidget */,
+				10SHARED02FF85B8D005C72F2 /* Shared */,
 				102B51392FF85B8D005C72F2 /* Products */,
 			);
 			sourceTree = "<group>";
@@ -114,6 +120,7 @@
 			);
 			fileSystemSynchronizedGroups = (
 				102B513A2FF85B8D005C72F2 /* Soulier */,
+				10SHARED02FF85B8D005C72F2 /* Shared */,
 			);
 			name = Soulier;
 			productName = Soulier;
@@ -132,6 +139,7 @@
 			);
 			fileSystemSynchronizedGroups = (
 				10A1W0022FF85B8D005C72F2 /* SoulierWidget */,
+				10SHARED02FF85B8D005C72F2 /* Shared */,
 			);
 			name = SoulierWidget;
 			productName = SoulierWidget;

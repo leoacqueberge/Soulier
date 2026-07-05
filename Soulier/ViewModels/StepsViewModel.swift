@@ -1,4 +1,5 @@
 import Foundation
+import WidgetKit
 
 @MainActor
 @Observable
@@ -119,6 +120,7 @@ final class StepsViewModel {
 
         await loadChartPeriods()
         await loadStreak()
+        syncWidgetSnapshotIfNeeded()
     }
 
     func loadStreak() async {
@@ -188,5 +190,22 @@ final class StepsViewModel {
         summary.weeklySteps[index] = today
         chartPeriods = summary.weeklySteps.map { $0.toPeriodStats() }
         await loadStreak()
+        syncWidgetSnapshot(from: today)
+    }
+
+    private func syncWidgetSnapshotIfNeeded() {
+        guard let today = summary.today else { return }
+        syncWidgetSnapshot(from: today)
+    }
+
+    private func syncWidgetSnapshot(from day: DaySteps) {
+        WidgetSnapshotStore.save(
+            steps: day.steps,
+            distanceKm: day.distanceKm,
+            calories: day.calories,
+            floors: day.floors,
+            date: day.date
+        )
+        WidgetCenter.shared.reloadAllTimelines()
     }
 }

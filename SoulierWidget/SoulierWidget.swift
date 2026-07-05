@@ -31,7 +31,7 @@ struct SoulierWidgetProvider: TimelineProvider {
         }
 
         Task {
-            let data = await WidgetHealthKitReader.fetchToday() ?? .preview
+            let data = await WidgetHealthKitReader.resolveToday()
             completion(StepsEntry(date: .now, data: data))
         }
     }
@@ -43,13 +43,7 @@ struct SoulierWidgetProvider: TimelineProvider {
         }
 
         Task {
-            let data = await WidgetHealthKitReader.fetchToday() ?? WidgetStepsData(
-                date: .now,
-                steps: 0,
-                distanceKm: 0,
-                calories: 0,
-                floors: 0
-            )
+            let data = await WidgetHealthKitReader.resolveToday()
             let entry = StepsEntry(date: .now, data: data)
             let nextUpdate = Calendar.current.date(byAdding: .minute, value: 15, to: .now) ?? .now.addingTimeInterval(900)
             completion(Timeline(entries: [entry], policy: .after(nextUpdate)))
