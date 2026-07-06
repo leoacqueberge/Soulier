@@ -18,9 +18,14 @@ final class StepsViewModel {
     var currentStreak: Int = 0
 
     private let healthKit = HealthKitManager()
+    private let pedometer = PedometerManager()
     private let debounceInterval: Duration = .seconds(1.5)
 
     private var refreshTask: Task<Void, Never>?
+    private var widgetSyncTask: Task<Void, Never>?
+
+    private var healthKitBaseSteps: Int?
+    private(set) var livePedometerSteps = 0
 
     init() {
         summary.dailyGoal = dailyGoal
@@ -39,7 +44,17 @@ final class StepsViewModel {
     }
 
     var displayedDay: DaySteps {
-        selectedDay.isToday ? (summary.today ?? selectedDay) : selectedDay
+        dayStepsWithLiveOverlay(selectedDay.isToday ? (summary.today ?? selectedDay) : selectedDay)
+    }
+
+    var weekPagesForDisplay: [[DaySteps]] {
+        weekPages.map { week in
+            week.map { dayStepsWithLiveOverlay($0) }
+        }
+    }
+
+    var isLiveStepTrackingActive: Bool {
+        pedometer.isTracking
     }
 
     func selectDay(_ day: DaySteps) {
@@ -126,7 +141,41 @@ final class StepsViewModel {
     func stopLiveUpdates() {
         refreshTask?.cancel()
         refreshTask = nil
+        widgetSyncTask?.cancel()
+        widgetSyncTask = nil
         healthKit.stopObserving()
+        stopLiveStepTracking()
+    }
+
+    func startLiveStepTracking() async {
+        guard healthKit.isAvailable else { return }
+
+        if !healthKit.isAuthorized {
+            await healthKit.requestAuthorization()
+        }
+
+        if let baseSteps = await healthKit.fetchTodayStepCount() {
+            healthKitBaseSteps = baseSteps
+        } else if let todaySteps = summary.today?.steps {
+            healthKitBaseSteps = todaySteps
+        }
+
+        guard healthKitBaseSteps != nil, pedometer.isAvailable else { return }
+
+        livePedometerSteps = 0
+        pedometer.startUpdates(from: Date()) { [weak self] steps in
+            guard let self else { return }
+            livePedometerSteps = steps
+            scheduleWidgetSync()
+        }
+    }
+
+    func stopLiveStepTracking() {
+        pedometer.stopUpdates()
+        healthKitBaseSteps = nil
+        livePedometerSteps = 0
+        widgetSyncTask?.cancel()
+        widgetSyncTask = nil
     }
 
     private func loadHistoryPeriods() async {
@@ -160,6 +209,20 @@ final class StepsViewModel {
         }
     }
 
+    private func dayStepsWithLiveOverlay(_ day: DaySteps) -> DaySteps {
+        guard day.isToday, pedometer.isTracking, let base = healthKitBaseSteps else { return day }
+        return day.withSteps(base + livePedometerSteps)
+    }
+
+    private func scheduleWidgetSync() {
+        widgetSyncTask?.cancel()
+        widgetSyncTask = Task {
+            try? await Task.sleep(for: debounceInterval)
+            guard !Task.isCancelled else { return }
+            syncWidgetSnapshotIfNeeded()
+        }
+    }
+
     private func scheduleTodayRefresh() {
         refreshTask?.cancel()
         refreshTask = Task {
@@ -172,14 +235,21 @@ final class StepsViewModel {
     private func refreshToday() async {
         guard let today = await healthKit.fetchToday() else { return }
 
-        if let index = summary.weeklySteps.firstIndex(where: \.isToday) {
-            summary.weeklySteps[index] = today
+        let mergedToday: DaySteps
+        if pedometer.isTracking, let base = healthKitBaseSteps {
+            mergedToday = today.withSteps(base + livePedometerSteps)
+        } else {
+            mergedToday = today
         }
 
-        updateDayInWeekPages(today)
+        if let index = summary.weeklySteps.firstIndex(where: \.isToday) {
+            summary.weeklySteps[index] = mergedToday
+        }
+
+        updateDayInWeekPages(mergedToday)
 
         if displayedDay.isToday {
-            await loadHourlySteps(for: today.date)
+            await loadHourlySteps(for: mergedToday.date)
         }
 
         if historyRange == .week {
@@ -187,7 +257,13 @@ final class StepsViewModel {
         }
 
         await loadStreak()
-        syncWidgetSnapshot(from: today)
+        syncWidgetSnapshot(from: mergedToday)
+    }
+
+    private func syncWidgetSnapshotIfNeeded() {
+        guard let today = summary.today else { return }
+        let snapshotDay = dayStepsWithLiveOverlay(today)
+        syncWidgetSnapshot(from: snapshotDay)
     }
 
     private func updateDayInWeekPages(_ day: DaySteps) {
@@ -197,11 +273,6 @@ final class StepsViewModel {
                 return
             }
         }
-    }
-
-    private func syncWidgetSnapshotIfNeeded() {
-        guard let today = summary.today else { return }
-        syncWidgetSnapshot(from: today)
     }
 
     private func syncWidgetSnapshot(from day: DaySteps) {

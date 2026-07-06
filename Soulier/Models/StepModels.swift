@@ -54,6 +54,20 @@ struct DaySteps: Identifiable, Hashable {
             dayCount: 1
         )
     }
+
+    func withSteps(_ steps: Int) -> DaySteps {
+        DaySteps(
+            date: date,
+            label: label,
+            dayInitial: dayInitial,
+            steps: steps,
+            distanceKm: distanceKm,
+            calories: calories,
+            floors: floors,
+            activeMinutes: activeMinutes,
+            isToday: isToday
+        )
+    }
 }
 
 struct PeriodStats: Identifiable, Hashable {

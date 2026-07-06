@@ -36,19 +36,14 @@ struct StepsView: View {
         }
         .background(AppTheme.background.ignoresSafeArea())
         .preferredColorScheme(.dark)
-        .task {
-            viewModel.startLiveUpdates()
-        }
-        .onDisappear {
-            viewModel.stopLiveUpdates()
-        }
         .animation(.easeInOut(duration: 0.2), value: viewModel.displayedDay.id)
+        .animation(.easeInOut(duration: 0.2), value: viewModel.displayedDay.steps)
         .animation(.easeInOut(duration: 0.2), value: viewModel.historyRange)
     }
 
     private var weeklySection: some View {
         WeekDaysPager(
-            weeks: viewModel.weekPages,
+            weeks: viewModel.weekPagesForDisplay,
             goal: viewModel.dailyGoal,
             selectedDayID: viewModel.selectedDayID,
             onSelectDay: viewModel.selectDay

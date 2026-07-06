@@ -203,6 +203,14 @@ final class HealthKitManager {
         return StreakCalculator.currentStreak(daySteps: daySteps, goal: goal, reference: end)
     }
 
+    func fetchTodayStepCount(reference: Date = .now) async -> Int? {
+        guard isAvailable, let stepType else { return nil }
+
+        let startOfToday = Calendar.current.startOfDay(for: reference)
+        let count = await sumQuantity(type: stepType, from: startOfToday, to: reference, unit: .count())
+        return Int(count)
+    }
+
     func fetchToday() async -> DaySteps? {
         guard isAvailable,
               let stepType,
