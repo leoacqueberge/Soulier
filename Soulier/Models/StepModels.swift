@@ -14,19 +14,15 @@ enum Timeframe: String, CaseIterable {
     }
 }
 
-enum NavTab: Hashable {
-    case steps
-    case history
-    case settings
-}
-
 struct DaySteps: Identifiable, Hashable {
     let date: Date
     let label: String
+    let dayInitial: String
     let steps: Int
     let distanceKm: Double
     let calories: Int
     let floors: Int
+    let activeMinutes: Int
     let isToday: Bool
 
     var id: Date { date }
@@ -38,6 +34,11 @@ struct DaySteps: Identifiable, Hashable {
     func completionPercent(goal: Int) -> Int {
         guard goal > 0 else { return 0 }
         return Int((Double(steps) / Double(goal)) * 100)
+    }
+
+    func progress(goal: Int) -> Double {
+        guard goal > 0 else { return 0 }
+        return min(Double(steps) / Double(goal), 1)
     }
 
     func toPeriodStats() -> PeriodStats {
@@ -133,13 +134,13 @@ struct StepSummary {
     static let preview = StepSummary(
         dailyGoal: 20_000,
         weeklySteps: [
-            DaySteps(date: .preview(daysAgo: 6), label: "Sat", steps: 10_200, distanceKm: 6.94, calories: 316, floors: 8, isToday: false),
-            DaySteps(date: .preview(daysAgo: 5), label: "Sun", steps: 13_400, distanceKm: 9.12, calories: 415, floors: 11, isToday: false),
-            DaySteps(date: .preview(daysAgo: 4), label: "Mon", steps: 17_100, distanceKm: 11.63, calories: 530, floors: 14, isToday: false),
-            DaySteps(date: .preview(daysAgo: 3), label: "Tue", steps: 13_200, distanceKm: 8.98, calories: 409, floors: 10, isToday: false),
-            DaySteps(date: .preview(daysAgo: 2), label: "Wed", steps: 16_300, distanceKm: 11.09, calories: 505, floors: 13, isToday: false),
-            DaySteps(date: .preview(daysAgo: 1), label: "Thu", steps: 19_400, distanceKm: 13.20, calories: 601, floors: 15, isToday: false),
-            DaySteps(date: .preview(daysAgo: 0), label: "Fri", steps: 21_583, distanceKm: 14.67, calories: 669, floors: 17, isToday: true),
+            DaySteps(date: .preview(daysAgo: 6), label: "Sat", dayInitial: "S", steps: 4_300, distanceKm: 2.93, calories: 158, floors: 4, activeMinutes: 22, isToday: false),
+            DaySteps(date: .preview(daysAgo: 5), label: "Sun", dayInitial: "S", steps: 8_100, distanceKm: 5.52, calories: 251, floors: 7, activeMinutes: 31, isToday: false),
+            DaySteps(date: .preview(daysAgo: 4), label: "Mon", dayInitial: "M", steps: 12_400, distanceKm: 8.44, calories: 385, floors: 10, activeMinutes: 45, isToday: false),
+            DaySteps(date: .preview(daysAgo: 3), label: "Tue", dayInitial: "T", steps: 9_800, distanceKm: 6.67, calories: 304, floors: 8, activeMinutes: 36, isToday: false),
+            DaySteps(date: .preview(daysAgo: 2), label: "Wed", dayInitial: "W", steps: 15_200, distanceKm: 10.34, calories: 472, floors: 12, activeMinutes: 52, isToday: false),
+            DaySteps(date: .preview(daysAgo: 1), label: "Thu", dayInitial: "T", steps: 18_900, distanceKm: 12.86, calories: 587, floors: 14, activeMinutes: 61, isToday: false),
+            DaySteps(date: .preview(daysAgo: 0), label: "Fri", dayInitial: "F", steps: 4_258, distanceKm: 2.93, calories: 132, floors: 9, activeMinutes: 39, isToday: true),
         ]
     )
 

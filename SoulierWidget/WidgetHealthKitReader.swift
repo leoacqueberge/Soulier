@@ -55,7 +55,7 @@ enum WidgetHealthKitReader {
         let now = Date()
         let start = Calendar.current.startOfDay(for: now)
 
-        async let steps = sum(type: stepType, from: start, to: now, unit: .count(), store: store)
+        async let steps = fetchStepCount(type: stepType, from: start, to: now, store: store)
         async let distance = sum(type: distanceType, from: start, to: now, unit: .meter(), store: store)
         async let calories = sum(type: caloriesType, from: start, to: now, unit: .kilocalorie(), store: store)
         async let floors = sum(type: floorsType, from: start, to: now, unit: .count(), store: store)
@@ -86,6 +86,46 @@ enum WidgetHealthKitReader {
         }
 
         return await fetchToday() ?? .empty
+    }
+
+    private static func fetchStepCount(
+        type: HKQuantityType,
+        from start: Date,
+        to end: Date,
+        store: HKHealthStore
+    ) async -> Int {
+        await withCheckedContinuation { continuation in
+            let calendar = Calendar.current
+            var anchorComponents = calendar.dateComponents([.day, .month, .year], from: start)
+            anchorComponents.hour = 0
+            guard let anchorDate = calendar.date(from: anchorComponents) else {
+                continuation.resume(returning: 0)
+                return
+            }
+
+            let query = HKStatisticsCollectionQuery(
+                quantityType: type,
+                quantitySamplePredicate: nil,
+                options: .cumulativeSum,
+                anchorDate: anchorDate,
+                intervalComponents: DateComponents(day: 1)
+            )
+
+            query.initialResultsHandler = { _, results, _ in
+                guard let results else {
+                    continuation.resume(returning: 0)
+                    return
+                }
+
+                var total = 0
+                results.enumerateStatistics(from: start, to: end) { statistics, _ in
+                    total += Int(statistics.sumQuantity()?.doubleValue(for: .count()) ?? 0)
+                }
+                continuation.resume(returning: total)
+            }
+
+            store.execute(query)
+        }
     }
 
     private static func sum(

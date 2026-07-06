@@ -5,23 +5,13 @@ import WidgetKit
 @Observable
 final class StepsViewModel {
     var summary = StepSummary.preview
-    var selectedPeriodID: Date?
-    var selectedTimeframe: Timeframe = .day
-    var chartPeriods: [PeriodStats] = StepSummary.preview.weeklySteps.map { $0.toPeriodStats() }
-    var selectedTab: NavTab = .steps
+    var weekPages: [[DaySteps]] = [StepSummary.preview.weeklySteps]
+    var selectedDayID: Date?
+    var hourlySteps: [HourlySteps] = HourlySteps.preview
+    var historyRange: HistoryRange = .week
+    var historyPeriods: [PeriodStats] = StepSummary.preview.weeklySteps.map { $0.toPeriodStats() }
     var isLoading = false
-    var dailyGoal: Int = DailyGoalStore.value {
-        didSet {
-            let clamped = DailyGoalStore.clamped(dailyGoal)
-            guard clamped == dailyGoal else {
-                dailyGoal = clamped
-                return
-            }
-            DailyGoalStore.value = dailyGoal
-            summary.dailyGoal = dailyGoal
-            Task { await loadStreak() }
-        }
-    }
+    let dailyGoal = DailyGoalStore.defaultValue
 
     var trendPeriod: TrendPeriod = .thisWeek
     var trend = TrendSummary.previewWeek
@@ -29,51 +19,68 @@ final class StepsViewModel {
 
     private let healthKit = HealthKitManager()
     private let debounceInterval: Duration = .seconds(1.5)
-    private let dayPreviewDuration: Duration = .seconds(2)
 
     private var refreshTask: Task<Void, Never>?
-    private var periodPreviewResetTask: Task<Void, Never>?
 
     init() {
         summary.dailyGoal = dailyGoal
     }
 
-    var selectedPeriod: PeriodStats {
-        if let selectedPeriodID,
-           let period = chartPeriods.first(where: { Calendar.current.isDate($0.startDate, inSameDayAs: selectedPeriodID) }) {
-            return period
-        }
-        return chartPeriods.last ?? StepSummary.preview.weeklySteps.last!.toPeriodStats()
+    var allWeekDays: [DaySteps] {
+        weekPages.flatMap { $0 }
     }
 
-    func selectPeriod(_ period: PeriodStats) {
-        periodPreviewResetTask?.cancel()
-        periodPreviewResetTask = nil
-
-        if period.isCurrent {
-            selectedPeriodID = nil
-            return
+    var selectedDay: DaySteps {
+        if let selectedDayID,
+           let day = allWeekDays.first(where: { Calendar.current.isDate($0.date, inSameDayAs: selectedDayID) }) {
+            return day
         }
-
-        selectedPeriodID = period.startDate
-
-        periodPreviewResetTask = Task {
-            try? await Task.sleep(for: dayPreviewDuration)
-            guard !Task.isCancelled else { return }
-            selectedPeriodID = nil
-        }
+        return allWeekDays.first(where: \.isToday) ?? allWeekDays.last ?? StepSummary.preview.today!
     }
 
-    func setTimeframe(_ timeframe: Timeframe) async {
-        periodPreviewResetTask?.cancel()
-        periodPreviewResetTask = nil
-        selectedPeriodID = nil
-        selectedTimeframe = timeframe
-        await loadChartPeriods()
+    var displayedDay: DaySteps {
+        selectedDay.isToday ? (summary.today ?? selectedDay) : selectedDay
     }
 
-    func adjustDailyGoal(by delta: Int) {
-        dailyGoal = DailyGoalStore.adjusted(by: delta, from: dailyGoal)
+    func selectDay(_ day: DaySteps) {
+        selectedDayID = day.isToday ? nil : day.date
+        Task { await loadHourlySteps(for: day.date) }
+    }
+
+    func setHistoryRange(_ range: HistoryRange) async {
+        historyRange = range
+        await loadHistoryPeriods()
+    }
+
+    func load() async {
+        isLoading = true
+        defer { isLoading = false }
+
+        summary.dailyGoal = dailyGoal
+
+        guard healthKit.isAvailable else { return }
+
+        if !healthKit.isAuthorized {
+            await healthKit.requestAuthorization()
+        }
+
+        if let pages = await healthKit.fetchWeekPages(weekCount: 5),
+           healthKit.isAuthorized || pages.flatMap({ $0 }).contains(where: { $0.steps > 0 }) {
+            weekPages = pages
+        } else {
+            weekPages = [StepSummary.preview.weeklySteps]
+        }
+
+        if let liveSummary = await healthKit.fetchSummary(dailyGoal: dailyGoal),
+           liveSummary.today != nil || healthKit.isAuthorized {
+            summary = liveSummary
+            summary.dailyGoal = dailyGoal
+        }
+
+        await loadHourlySteps(for: displayedDay.date)
+        await loadHistoryPeriods()
+        await loadStreak()
+        syncWidgetSnapshotIfNeeded()
     }
 
     func loadTrend() async {
@@ -100,34 +107,11 @@ final class StepsViewModel {
         await loadTrend()
     }
 
-    func load() async {
-        isLoading = true
-        defer { isLoading = false }
-
-        summary.dailyGoal = dailyGoal
-
-        guard healthKit.isAvailable else { return }
-
-        if !healthKit.isAuthorized {
-            await healthKit.requestAuthorization()
-        }
-
-        if let liveSummary = await healthKit.fetchSummary(dailyGoal: dailyGoal),
-           liveSummary.today != nil || healthKit.isAuthorized {
-            summary = liveSummary
-            summary.dailyGoal = dailyGoal
-        }
-
-        await loadChartPeriods()
-        await loadStreak()
-        syncWidgetSnapshotIfNeeded()
-    }
-
     func loadStreak() async {
         if let streak = await healthKit.fetchStreak(goal: dailyGoal) {
             currentStreak = streak
         } else {
-            currentStreak = StreakCalculator.currentStreak(from: summary.weeklySteps, goal: dailyGoal)
+            currentStreak = StreakCalculator.currentStreak(from: allWeekDays, goal: dailyGoal)
         }
     }
 
@@ -142,32 +126,36 @@ final class StepsViewModel {
     func stopLiveUpdates() {
         refreshTask?.cancel()
         refreshTask = nil
-        periodPreviewResetTask?.cancel()
-        periodPreviewResetTask = nil
         healthKit.stopObserving()
     }
 
-    private func loadChartPeriods() async {
-        if let livePeriods = await healthKit.fetchChartPeriods(for: selectedTimeframe),
+    private func loadHistoryPeriods() async {
+        if let livePeriods = await healthKit.fetchHistoryPeriods(for: historyRange),
            healthKit.isAuthorized || livePeriods.contains(where: { $0.steps > 0 }) {
-            chartPeriods = livePeriods
+            historyPeriods = livePeriods
         } else {
-            chartPeriods = previewChartPeriods(for: selectedTimeframe)
-        }
-
-        if let selectedPeriodID,
-           !chartPeriods.contains(where: { Calendar.current.isDate($0.startDate, inSameDayAs: selectedPeriodID) }) {
-            self.selectedPeriodID = nil
+            historyPeriods = previewHistoryPeriods(for: historyRange)
         }
     }
 
-    private func previewChartPeriods(for timeframe: Timeframe) -> [PeriodStats] {
-        switch timeframe {
-        case .day:
-            return StepSummary.preview.weeklySteps.map { $0.toPeriodStats() }
+    private func loadHourlySteps(for day: Date) async {
+        if let liveHourly = await healthKit.fetchHourlySteps(for: day),
+           healthKit.isAuthorized || liveHourly.contains(where: { $0.steps > 0 }) {
+            hourlySteps = liveHourly
+        } else {
+            hourlySteps = HourlySteps.preview
+        }
+    }
+
+    private func previewHistoryPeriods(for range: HistoryRange) -> [PeriodStats] {
+        switch range {
         case .week:
-            return StepSummary.previewWeeks
+            return StepSummary.preview.weeklySteps.map { $0.toPeriodStats() }
         case .month:
+            return StepSummary.preview.weeklySteps.map { $0.toPeriodStats() }
+        case .sixMonths:
+            return StepSummary.previewWeeks
+        case .year, .threeYears:
             return StepSummary.previewMonths
         }
     }
@@ -182,15 +170,33 @@ final class StepsViewModel {
     }
 
     private func refreshToday() async {
-        guard selectedTimeframe == .day else { return }
+        guard let today = await healthKit.fetchToday() else { return }
 
-        guard let today = await healthKit.fetchToday(),
-              let index = summary.weeklySteps.firstIndex(where: \.isToday) else { return }
+        if let index = summary.weeklySteps.firstIndex(where: \.isToday) {
+            summary.weeklySteps[index] = today
+        }
 
-        summary.weeklySteps[index] = today
-        chartPeriods = summary.weeklySteps.map { $0.toPeriodStats() }
+        updateDayInWeekPages(today)
+
+        if displayedDay.isToday {
+            await loadHourlySteps(for: today.date)
+        }
+
+        if historyRange == .week {
+            await loadHistoryPeriods()
+        }
+
         await loadStreak()
         syncWidgetSnapshot(from: today)
+    }
+
+    private func updateDayInWeekPages(_ day: DaySteps) {
+        for weekIndex in weekPages.indices {
+            if let dayIndex = weekPages[weekIndex].firstIndex(where: { Calendar.current.isDate($0.date, inSameDayAs: day.date) }) {
+                weekPages[weekIndex][dayIndex] = day
+                return
+            }
+        }
     }
 
     private func syncWidgetSnapshotIfNeeded() {

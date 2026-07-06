@@ -108,7 +108,7 @@ struct WeeklyBarChart: View {
 
 #Preview {
     ZStack {
-        AppTheme.blueGradient
+        AppTheme.background
             .ignoresSafeArea()
         WeeklyBarChart(
             periods: StepSummary.preview.weeklySteps.map { $0.toPeriodStats() },

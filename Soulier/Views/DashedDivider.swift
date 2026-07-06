@@ -22,7 +22,7 @@ struct DashedDivider: View {
 
 #Preview {
     ZStack {
-        AppTheme.blueGradient.ignoresSafeArea()
+        AppTheme.background.ignoresSafeArea()
         DashedDivider()
             .padding(.horizontal, 24)
     }

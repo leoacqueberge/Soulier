@@ -5,7 +5,7 @@ struct HistoryView: View {
 
     var body: some View {
         ZStack {
-            AppTheme.blueGradient
+            AppTheme.background
                 .ignoresSafeArea()
 
             ScrollView(showsIndicators: false) {
